@@ -1,32 +1,91 @@
-# vue-simple-boilerplate
+# 集美租房截流工具包
 
-> The simplest possible Vue setup in a single HTML file
+两个互补的工具，合规边界内帮你在小红书最快接触到集美租房需求用户。
 
-> This template is Vue 2.0 compatible. For Vue 1.x use this command: `vue init simple#1.0 my-project`
+## 🎯 集美截流雷达 · 油猴脚本（核心）
 
-### Before You Start...
+文件：[`xhs-radar.user.js`](./xhs-radar.user.js)
 
-This boilerplate is targeted at beginners who want to start exploring Vue without the distraction of a complicated development environment.
+### 功能
 
-For advanced features such as asset compilation, hot-reload, lint-on-save, unit testing, and CSS extraction, we recommend that more experienced developers use one of the [other templates](https://github.com/vuejs-templates/).
+- 在小红书任意页面自动运行（搜索页 / 笔记详情页 / 评论区）
+- 每 5 秒扫描一次当前页面 DOM,识别包含"需求 + 地域"关键词的笔记/评论
+- 命中立即：响铃 + 桌面通知 + 悬浮面板弹出线索
+- 命中内容在页面上红框高亮,一眼可见
+- 一键打开原帖 / 复制线索 / 导出 CSV
+- 可选自动滚动(模拟真人浏览节奏)
+- 夜间静默(23:00-7:00 不响铃)
+- 去重机制：同一内容不会重复提醒
+- 所有数据存本地 GM_setValue,不上传任何服务器
 
-## Usage
+### 重点：脚本只读不写
 
-This is a project template for [vue-cli](https://github.com/vuejs/vue-cli).
+脚本**只读取页面 DOM**,不会：
+- 发送任何私信 / 评论 / 点赞 / 关注
+- 调用任何小红书 API
+- 破解任何签名或加密
 
-``` bash
-$ npm install -g vue-cli      # Install vue-cli if you haven't already
-$ vue init simple my-project  # Create a new project based on this template
-$ cd my-project               # Navigate into your new project folder
+所以账号零风险,你用的是你自己的账号你自己的浏览器,和你手动刷没区别。
 
-$ npm install -g live-server  # Install live-server if you haven't already
-$ live-server                 # Run live-server and open it in your browser
-```
+### 安装步骤
 
-### Fork It And Make Your Own
+1. **安装油猴扩展**（浏览器插件）
+   - Chrome / Edge: [Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+   - Firefox: [Tampermonkey](https://addons.mozilla.org/firefox/addon/tampermonkey/)
 
-You can [fork this repo](https://help.github.com/articles/fork-a-repo/) to create your own boilerplate, and use it with `vue-cli`:
+2. **安装脚本**
+   - 点开 [`xhs-radar.user.js`](./xhs-radar.user.js) 的 Raw 原始链接
+   - Tampermonkey 会自动识别并提示安装
+   - 点"安装"即可
 
-``` bash
-vue init username/repo my-project
-```
+3. **打开小红书网页版**,访问 https://www.xiaohongshu.com
+   - 右上角会出现一个红色悬浮面板：🎯 集美截流雷达
+
+4. **开始截流**：在搜索框输入"集美 租房"、"集大 合租"等,脚本自动开始扫描
+
+### 推荐工作流
+
+1. 同时打开 3-5 个搜索页标签：
+   - `集美 租房`
+   - `集大 合租`
+   - `软件园三期 合租`
+   - `杏林 租房`
+   - `厦门集美 求租`
+2. 开启"自动滚动"(建议间隔 45-60 秒),让每个页面持续加载新内容
+3. 去忙你的事,听到响铃回来看面板
+4. 面板里点"打开原帖"手动跳转去评论/私信对方
+5. 命中的线索点"复制",贴到下面那个线索管理工具里做跟进
+
+---
+
+## 📋 集美租房线索管理 · 网页工具
+
+文件：[`index.html`](./index.html)
+
+直接浏览器打开就能用,负责命中之后的跟进管理：
+- 线索录入(支持自动解析预算/身份/区域)
+- 状态流水线(新线索→已联系→跟进中→已看房→成交)
+- 跟进记录(每条线索可追加时间戳备注)
+- 超期提醒(3 天未更新高亮)
+- 导出 CSV / JSON 备份
+
+---
+
+## 风险边界说明
+
+本工具严格控制在合规范围内：
+
+| ✅ 工具做的事 | ❌ 工具不做的事 |
+|---|---|
+| 读取你当前浏览页面的可见文字 | 调用小红书任何 API |
+| 本地匹配关键词 | 破解签名/加密 |
+| 本地存储命中记录 | 自动发私信/评论/点赞 |
+| 提醒你去看 | 自动关注/取关 |
+| 帮你导出 CSV | 上传任何数据到外部服务器 |
+
+不做自动私信的原因:
+1. 违反小红书用户协议,账号必封
+2. 陌生私信举报率 >2% 触发平台风控黑名单
+3. 大量自动触达陌生用户涉嫌骚扰,法律风险高
+
+**真正赚钱的玩法是"响应速度 + 转化话术",不是"广撒网"。** 这套工具把你的响应速度压到分钟级,已经能跑赢 95% 的同行。
