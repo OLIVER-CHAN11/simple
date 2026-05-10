@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         集美租房截流雷达 · 小红书版
 // @namespace    https://github.com/OLIVER-CHAN11/simple
-// @version      1.0.0
+// @version      1.1.0
 // @description  自动监控小红书搜索页 / 笔记评论区，命中租房需求关键词时响铃提醒并收集线索。纯被动监听，不做任何发送/点赞/私信操作，账号安全。
 // @author       you
 // @match        https://www.xiaohongshu.com/*
@@ -57,6 +57,8 @@
   let scanCount = 0;
   let lastScanAt = 0;
   let autoScrollTimer = null;
+  let scanTimer = null;
+  let scanEnabled = true;  // 扫描总开关（不落盘，刷新即恢复）
   let panelCollapsed = false;
 
   function loadJSON(k, fallback) {
@@ -142,8 +144,32 @@
       background: #fff; border-radius: 4px; cursor: pointer; color: #374151;
     }
     #jm-radar .jm-hit .h-btn:hover { border-color: #ef4444; color: #ef4444; }
-    #jm-radar .jm-hit .h-btn.primary { background: #ef4444; color: #fff; border-color: #ef4444; }
-    #jm-radar .jm-hit .h-btn.primary:hover { background: #dc2626; }
+    #jm-radar .jm-hit .h-btn.primary { background: #ef4444; color: #fff; border-color: #ef4444; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+    #jm-radar .jm-hit .h-btn.primary:hover { background: #dc2626; color: #fff; }
+    #jm-radar .jm-hit .h-btn.primary.disabled { background: #d1d5db; border-color: #d1d5db; cursor: not-allowed; pointer-events: none; }
+
+    /* 顶部快捷开关 */
+    #jm-radar .jm-quickbar {
+      display: flex; gap: 6px; padding: 8px 12px;
+      background: #fafafa; border-bottom: 1px solid #e5e7eb;
+    }
+    #jm-radar .jm-quick-btn {
+      flex: 1; padding: 6px 4px; font-size: 11px;
+      border: 1px solid #d1d5db; background: #fff; border-radius: 5px;
+      cursor: pointer; color: #6b7280; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    #jm-radar .jm-quick-btn:hover { border-color: #9ca3af; }
+    #jm-radar .jm-quick-btn.on {
+      background: #10b981; color: #fff; border-color: #10b981;
+    }
+    #jm-radar .jm-quick-btn.on.warn {
+      background: #f59e0b; border-color: #f59e0b;
+    }
+    #jm-radar .jm-quick-btn .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #d1d5db;
+    }
+    #jm-radar .jm-quick-btn.on .dot { background: #fff; }
 
     #jm-radar .jm-empty { text-align: center; color: #9ca3af; padding: 20px 0; }
 
@@ -194,6 +220,17 @@
       </div>
     </div>
     <div class="jm-body">
+      <div class="jm-quickbar">
+        <button class="jm-quick-btn" id="jm-q-scan" title="开关扫描">
+          <span class="dot"></span><span>扫描中</span>
+        </button>
+        <button class="jm-quick-btn" id="jm-q-scroll" title="开关自动滚动">
+          <span class="dot"></span><span>自动滚动</span>
+        </button>
+        <button class="jm-quick-btn" id="jm-q-sound" title="开关响铃">
+          <span class="dot"></span><span>响铃</span>
+        </button>
+      </div>
       <div class="jm-tabs">
         <div class="jm-tab active" data-tab="hits">🔥 命中 <span id="jm-hits-badge" style="background:#ef4444;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;display:none;">0</span></div>
         <div class="jm-tab" data-tab="status">📊 状态</div>
@@ -305,6 +342,7 @@
     config.quietNight = panel.querySelector('#jm-cfg-night').checked;
     saveJSON(STORAGE_KEY_CONFIG, config);
     setupAutoScroll();
+    updateQuickBtns();
     toast('配置已保存');
   };
   panel.querySelector('#jm-btn-reset-cfg').onclick = () => {
@@ -313,6 +351,7 @@
     saveJSON(STORAGE_KEY_CONFIG, config);
     fillConfigUI();
     setupAutoScroll();
+    updateQuickBtns();
   };
   panel.querySelector('#jm-btn-scan').onclick = () => scan(true);
   panel.querySelector('#jm-btn-clear-seen').onclick = () => {
@@ -324,6 +363,41 @@
     hits = []; saveJSON(STORAGE_KEY_HITS, hits); renderHits();
   };
   panel.querySelector('#jm-btn-export').onclick = exportCSV;
+
+  // 顶部快捷开关
+  function updateQuickBtns() {
+    const $scan = panel.querySelector('#jm-q-scan');
+    const $scroll = panel.querySelector('#jm-q-scroll');
+    const $sound = panel.querySelector('#jm-q-sound');
+    $scan.classList.toggle('on', scanEnabled);
+    $scan.querySelector('span:last-child').textContent = scanEnabled ? '扫描中' : '已暂停';
+    $scroll.classList.toggle('on', config.autoScroll);
+    $scroll.classList.toggle('warn', config.autoScroll);
+    $scroll.querySelector('span:last-child').textContent = config.autoScroll ? `滚动中(${config.autoScrollInterval}s)` : '自动滚动';
+    $sound.classList.toggle('on', config.enableSound);
+    $sound.querySelector('span:last-child').textContent = config.enableSound ? '响铃开' : '静音';
+  }
+  panel.querySelector('#jm-q-scan').onclick = () => {
+    scanEnabled = !scanEnabled;
+    setupScanTimer();
+    updateQuickBtns();
+    toast(scanEnabled ? '已开启扫描' : '已暂停扫描');
+  };
+  panel.querySelector('#jm-q-scroll').onclick = () => {
+    config.autoScroll = !config.autoScroll;
+    saveJSON(STORAGE_KEY_CONFIG, config);
+    setupAutoScroll();
+    fillConfigUI();
+    updateQuickBtns();
+    toast(config.autoScroll ? `已开启自动滚动（每${config.autoScrollInterval}秒）` : '已关闭自动滚动');
+  };
+  panel.querySelector('#jm-q-sound').onclick = () => {
+    config.enableSound = !config.enableSound;
+    saveJSON(STORAGE_KEY_CONFIG, config);
+    fillConfigUI();
+    updateQuickBtns();
+    toast(config.enableSound ? '响铃已开启' : '已静音');
+  };
 
   function splitKws(s) {
     return s.split(/[,，\n]/).map(x => x.trim()).filter(Boolean);
@@ -345,19 +419,19 @@
 
     // 1) 搜索结果页：笔记卡片
     if (pageType === 'search' || pageType === 'other') {
-      // 小红书笔记卡片常见结构：section.note-item / a[href*="/explore/"]
-      document.querySelectorAll('section.note-item, .note-item, a[href*="/explore/"]').forEach(el => {
-        // 跳过已处理的
+      // 小红书笔记卡片常见结构：section.note-item / a[href*="/explore/"] / a[href*="/search_result/"]
+      const cards = document.querySelectorAll(
+        'section.note-item, .note-item, a.cover[href], a[href*="/explore/"], a[href*="/search_result/"]'
+      );
+      cards.forEach(el => {
         if (el.dataset._jmScanned === '1') return;
-        const titleEl = el.querySelector('.title, [class*="title"], span, .footer .author');
         const text = (el.innerText || '').trim();
         if (!text || text.length < 5) return;
         // 作者
         const authorEl = el.querySelector('.author, [class*="author"], .name, [class*="user-name"]');
         const author = authorEl ? authorEl.innerText.trim() : '';
-        // 链接
-        const a = el.tagName === 'A' ? el : el.querySelector('a[href*="/explore/"]');
-        const url = a ? new URL(a.href, location.origin).href : location.href;
+        // 找链接：卡片本身是 <a> 或者内部有带 xsec_token 的 <a>
+        const url = extractNoteUrl(el);
         const id = hashStr(url + '|' + text.slice(0, 80));
         out.push({ id, author, text, element: el, url, type: 'note-card' });
       });
@@ -394,6 +468,33 @@
     return out;
   }
 
+  // 从笔记卡片元素里抠出真正可直接跳转的链接
+  // 小红书 2024+ 的笔记 URL 必须带 xsec_token,不然打开会被重定向
+  function extractNoteUrl(el) {
+    // 优先找带 xsec_token 的 a
+    const candidates = [];
+    if (el.tagName === 'A' && el.href) candidates.push(el);
+    candidates.push(...el.querySelectorAll('a[href]'));
+    // 去重并打分:带 xsec_token 的优先,其次是 /explore/ 或 /search_result/
+    let best = null, bestScore = -1;
+    for (const a of candidates) {
+      const href = a.getAttribute('href') || '';
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) continue;
+      let score = 0;
+      if (/xsec_token/.test(href)) score += 10;
+      if (/\/explore\//.test(href)) score += 5;
+      if (/\/search_result\//.test(href)) score += 4;
+      if (/\/discovery\/item\//.test(href)) score += 3;
+      if (a.classList.contains('cover') || a.querySelector('img')) score += 1;
+      if (score > bestScore) { bestScore = score; best = a; }
+    }
+    if (best) {
+      try { return new URL(best.getAttribute('href'), location.origin).href; }
+      catch { return location.href; }
+    }
+    return location.href;
+  }
+
   function matchKeywords(text, keywords) {
     const t = text.toLowerCase();
     return keywords.filter(k => t.includes(k.toLowerCase()));
@@ -423,8 +524,12 @@
         };
         hits.unshift(hit);
         newHitCount++;
-        if (config.highlightInPage && c.element) {
-          c.element.classList.add('jm-radar-highlight');
+        if (c.element) {
+          // 打 id 方便"定位"按钮用
+          c.element.setAttribute('data-_jm-hit-id', c.id);
+          if (config.highlightInPage) {
+            c.element.classList.add('jm-radar-highlight');
+          }
         }
       }
     }
@@ -476,6 +581,11 @@
     wrap.innerHTML = hits.slice(0, 50).map((h, i) => {
       const highlighted = highlightMatches(escapeHtml(h.text), [...h.needMatch, ...h.areaMatch]);
       const isNew = (Date.now() - h.at) < 5000 && i < 3;
+      // 判断链接是不是"真正的笔记链接"(而不只是当前页地址)
+      const hasRealLink = h.url && h.url !== location.href && /\/explore\/|\/search_result\/|\/discovery\/item\//.test(h.url);
+      const openBtn = hasRealLink
+        ? `<a class="h-btn primary" data-act="open" data-idx="${i}" href="${escapeHtml(h.url)}" target="_blank" rel="noopener noreferrer">打开原帖</a>`
+        : `<a class="h-btn primary disabled" title="这条没抓到直接链接(可能是笔记正文/评论),请去当前页找" data-idx="${i}">无直链</a>`;
       return `
         <div class="jm-hit ${isNew ? 'new' : ''}">
           <div class="h-meta">
@@ -486,8 +596,9 @@
           ${h.author ? `<div><span class="h-author">@${escapeHtml(h.author)}</span></div>` : ''}
           <div class="h-text">${highlighted}</div>
           <div class="h-actions">
-            <button class="h-btn primary" data-act="open" data-idx="${i}">打开原帖</button>
+            ${openBtn}
             <button class="h-btn" data-act="copy" data-idx="${i}">复制</button>
+            <button class="h-btn" data-act="locate" data-idx="${i}">定位</button>
             <button class="h-btn" data-act="del" data-idx="${i}">忽略</button>
           </div>
         </div>
@@ -495,15 +606,28 @@
     }).join('');
     // 绑定按钮
     wrap.querySelectorAll('.h-btn').forEach(btn => {
-      btn.onclick = () => {
+      // 打开原帖用 a 标签的默认行为,不拦截
+      if (btn.dataset.act === 'open') return;
+      btn.onclick = (e) => {
+        e.preventDefault();
         const i = parseInt(btn.dataset.idx);
         const h = hits[i];
         if (!h) return;
-        if (btn.dataset.act === 'open') {
-          window.open(h.url, '_blank');
-        } else if (btn.dataset.act === 'copy') {
-          const payload = `[${typeLabel(h.type)}] @${h.author}\n${h.text}\n${h.url}`;
+        if (btn.dataset.act === 'copy') {
+          const payload = `[${typeLabel(h.type)}] @${h.author || ''}\n${h.text}\n${h.url}`;
           navigator.clipboard.writeText(payload).then(() => toast('已复制'));
+        } else if (btn.dataset.act === 'locate') {
+          // 滚动到页面对应元素
+          const el = document.querySelector(`[data-_jm-hit-id="${h.id}"]`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('jm-radar-highlight');
+            setTimeout(() => el.classList.remove('jm-radar-highlight'), 3000);
+            el.classList.add('jm-radar-highlight');
+            toast('已定位到页面');
+          } else {
+            toast('此条已不在当前页面 DOM 中（可能页面已滚动过）');
+          }
         } else if (btn.dataset.act === 'del') {
           hits.splice(i, 1);
           saveJSON(STORAGE_KEY_HITS, hits);
@@ -532,12 +656,15 @@
     if (autoScrollTimer) { clearInterval(autoScrollTimer); autoScrollTimer = null; }
     if (!config.autoScroll) return;
     autoScrollTimer = setInterval(() => {
-      // 模拟真人：随机滚动距离
-      const dist = 400 + Math.random() * 400;
-      window.scrollBy({ top: dist, behavior: 'smooth' });
-      // 偶尔滚回顶部刷新一下
-      if (Math.random() < 0.1) {
-        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 3000);
+      const doc = document.documentElement;
+      const nearBottom = window.scrollY + window.innerHeight >= doc.scrollHeight - 200;
+      if (nearBottom) {
+        // 到底了,稍等再滚回顶部触发重新加载
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        // 模拟真人:随机滚动距离
+        const dist = 400 + Math.random() * 500;
+        window.scrollBy({ top: dist, behavior: 'smooth' });
       }
     }, config.autoScrollInterval * 1000);
   }
@@ -659,10 +786,15 @@
   // ==================== 启动 ====================
   const startAt = Date.now();
 
-  // 周期扫描：5 秒一次（轻量，只读 DOM，不产生网络请求）
-  setInterval(() => scan(false), 5000);
+  // 周期扫描（受 scanEnabled 控制，可暂停）
+  function setupScanTimer() {
+    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+    if (!scanEnabled) return;
+    scanTimer = setInterval(() => scan(false), 5000);
+  }
+  setupScanTimer();
   // 初始扫描
-  setTimeout(() => scan(false), 1500);
+  setTimeout(() => { if (scanEnabled) scan(false); }, 1500);
   // 状态面板定时刷新
   setInterval(renderStatus, 1000);
 
@@ -674,6 +806,7 @@
 
   setupAutoScroll();
   renderAll();
+  updateQuickBtns();
 
   console.log('[集美截流雷达] 已启动', config);
 })();
