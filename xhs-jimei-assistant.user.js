@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         小红书集美租房截流助手
 // @namespace    https://github.com/OLIVER-CHAN11/simple
-// @version      1.0.0
-// @description  辅助识别小红书评论区中的集美区租房需求，生成评论回复和私信话术，一键复制。不做任何自动发送/批量操作，账号零风险。
+// @version      1.1.0
+// @description  辅助识别小红书评论区中的集美区租房需求，生成评论回复和私信话术，一键填入/复制。不自动发送任何内容，账号零风险。
 // @author       you
 // @match        *://*.xiaohongshu.com/*
 // @grant        GM_setValue
@@ -303,16 +303,22 @@
   GM_addStyle(`
     #jm-assistant {
       position: fixed; top: 80px; right: 16px; z-index: 999999;
-      width: 380px; max-height: 85vh;
+      width: 380px; height: 85vh; max-height: 85vh;
       background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.15);
       font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
       font-size: 13px; color: #111827;
       display: flex; flex-direction: column;
+      overflow: hidden;
     }
-    #jm-assistant.collapsed { width: 160px; }
+    #jm-assistant.collapsed { width: 160px; height: auto; }
     #jm-assistant.collapsed .jma-body { display: none; }
+    #jm-assistant .jma-body {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+    }
     #jm-assistant .jma-header {
+      flex-shrink: 0;
       padding: 10px 12px;
       background: linear-gradient(90deg, #ff2442, #ff5b5b);
       color: #fff; border-radius: 10px 10px 0 0;
@@ -326,6 +332,7 @@
       width: 24px; height: 24px; border-radius: 4px; cursor: pointer;
     }
     #jm-assistant .jma-toolbar {
+      flex-shrink: 0;
       padding: 8px 12px; display: flex; gap: 6px; flex-wrap: wrap;
       border-bottom: 1px solid #f3f4f6;
     }
@@ -343,13 +350,17 @@
     #jm-assistant .jma-btn.danger { color: #dc2626; }
 
     #jm-assistant .jma-stats {
+      flex-shrink: 0;
       padding: 6px 12px; font-size: 11px; color: #6b7280;
       background: #fafafa; border-bottom: 1px solid #f3f4f6;
       display: flex; justify-content: space-between;
     }
 
     #jm-assistant .jma-list {
-      flex: 1; overflow-y: auto; padding: 8px 12px;
+      flex: 1 1 auto; min-height: 0;
+      overflow-y: auto; overflow-x: hidden;
+      padding: 8px 12px;
+      overscroll-behavior: contain;
     }
     #jm-assistant .jma-empty {
       text-align: center; color: #9ca3af; padding: 32px 0; font-size: 12px;
@@ -413,6 +424,11 @@
       background: #fff; border-radius: 3px; cursor: pointer; color: #374151;
     }
     .jma-card .c-script-block .c-mini-copy:hover { border-color: #ff2442; color: #ff2442; }
+    .jma-card .c-script-block .c-mini-primary {
+      background: #ff2442; color: #fff; border-color: #ff2442;
+      margin-right: 4px;
+    }
+    .jma-card .c-script-block .c-mini-primary:hover { background: #e91e3a; color: #fff; border-color: #e91e3a; }
 
     .jma-card .c-actions {
       display: grid; grid-template-columns: repeat(3, 1fr);
@@ -586,7 +602,10 @@
         <div class="c-script-block">
           <div class="c-script-label">
             <span>💬 评论区回复话术</span>
-            <button class="c-mini-copy" data-lead-act="copy-comment" data-lead-id="${lead.id}">复制</button>
+            <span>
+              <button class="c-mini-copy c-mini-primary" data-lead-act="fill-comment" data-lead-id="${lead.id}" title="滚到评论框并填入话术（不自动发送，你自己按发送）">📝 填入</button>
+              <button class="c-mini-copy" data-lead-act="copy-comment" data-lead-id="${lead.id}">复制</button>
+            </span>
           </div>
           <div>${escapeHtml(lead.commentReply)}</div>
         </div>
@@ -619,6 +638,11 @@
       case 'copy-dm':
         copyToClipboard(lead.dmReply);
         toast('私信话术已复制');
+        break;
+      case 'fill-comment':
+        // 同时把话术塞到剪贴板（兜底，万一填入失败用户可以手动粘贴）
+        copyToClipboard(lead.commentReply);
+        fillCommentBox(lead);
         break;
       case 'mark-comment':
         lead.status = '已评论';
@@ -665,6 +689,115 @@
       }
     }
   }
+
+  // ============================================================
+  // 一键填入评论框（不自动发送）
+  // ============================================================
+  // 安全边界：
+  // - 不做任何 click/keyboard 事件合成
+  // - 不调用任何发送按钮
+  // - 只滚动定位 + 聚焦 + 写入文字
+  // - 用户自己检查内容后自己按"发送"
+
+  function findCommentInput() {
+    // 小红书评论输入框可能的形态（按命中概率排序）
+    const selectors = [
+      // 新版主评论输入
+      '#content-textarea',
+      '.content-input',
+      '.comment-input',
+      // 通用 contenteditable
+      '[contenteditable="true"][data-placeholder]',
+      '[contenteditable="true"][placeholder]',
+      '[contenteditable="true"].content-edit',
+      // 常见输入框 class 模糊匹配
+      '[class*="comment"] [contenteditable="true"]',
+      '[class*="CommentInput"] [contenteditable="true"]',
+      '[class*="comment-input"] textarea',
+      '[class*="reply"] [contenteditable="true"]',
+      // 兜底：任何可见 contenteditable
+      'div[contenteditable="true"]',
+      'textarea',
+    ];
+    for (const sel of selectors) {
+      const nodes = document.querySelectorAll(sel);
+      for (const n of nodes) {
+        // 跳过脚本面板自己
+        if (n.closest('#jm-assistant')) continue;
+        // 必须可见
+        const r = n.getBoundingClientRect();
+        if (r.width < 30 || r.height < 10) continue;
+        if (getComputedStyle(n).visibility === 'hidden') continue;
+        if (getComputedStyle(n).display === 'none') continue;
+        return n;
+      }
+    }
+    return null;
+  }
+
+  // 往 contenteditable 里写入文字，触发 React/Vue 的 input 事件让组件感知到
+  function setEditorText(el, text) {
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      // 用原生 setter 保证 React 能收到变更
+      const proto = el.tagName === 'TEXTAREA'
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+      setter.call(el, text);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    // contenteditable
+    el.focus();
+    // 清空原有内容（如果是占位符）
+    el.innerHTML = '';
+    // 插入文本节点
+    const tn = document.createTextNode(text);
+    el.appendChild(tn);
+    // 把光标移到最后
+    try {
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {}
+    // 触发多种事件让 React 组件同步状态
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function fillCommentBox(lead) {
+    let editor = findCommentInput();
+    if (!editor) {
+      // 有的页面评论框在笔记详情侧边栏里，如果没找到提示用户点一下"说点什么"
+      toast('没找到评论输入框，请先手动点击"说点什么"再试');
+      return;
+    }
+    // 滚到可见
+    editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 小延迟确保滚动结束
+    setTimeout(() => {
+      try {
+        setEditorText(editor, lead.commentReply);
+        // 聚焦让用户看见
+        editor.focus();
+        // 闪烁一下边框提示"已填入,请检查后按发送"
+        const origOutline = editor.style.outline;
+        editor.style.transition = 'outline 0.2s';
+        editor.style.outline = '3px solid #ff2442';
+        setTimeout(() => editor.style.outline = origOutline, 1500);
+        toast('已填入评论框,请检查后自己按发送键');
+      } catch (err) {
+        console.error('[集美助手] 填入失败', err);
+        toast('填入失败,话术已复制到剪贴板,请手动粘贴');
+      }
+    }, 300);
+  }
+
 
   // ============================================================
   // 导出 CSV
