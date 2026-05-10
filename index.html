@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>集美租房线索管理</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --text: #111827;
+    --muted: #6b7280;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header .actions { display: flex; gap: 8px; }
+
+  .btn {
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--primary); color: var(--primary); }
+  .btn-primary {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+  .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: white; }
+  .btn-danger { color: var(--danger); }
+  .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--card);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+  .stat .label { color: var(--muted); font-size: 12px; }
+  .stat .value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+  .stat.warn .value { color: var(--warn); }
+  .stat.success .value { color: var(--success); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .card h2 { font-size: 15px; margin: 0 0 12px 0; font-weight: 600; }
+
+  .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .form-field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input, select, textarea {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    background: white;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(37,99,235,0.1);
+  }
+  textarea { min-height: 70px; resize: vertical; }
+
+  .filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .filters > * { flex: 0 0 auto; }
+  .filters input[type="search"] { width: 240px; flex: 1 1 200px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: #fafafa; font-weight: 600; font-size: 12px; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafbfc; }
+  tr.stale { background: #fffbeb; }
+  tr.stale:hover td { background: #fef3c7; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  .badge-gray { background: #f3f4f6; color: #4b5563; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-yellow { background: #fef3c7; color: #92400e; }
+  .badge-purple { background: #e9d5ff; color: #6b21a8; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+
+  .tags { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .status-select { border: none; background: transparent; font-size: 11px; font-weight: 500; padding: 2px 4px; cursor: pointer; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: var(--card);
+    border-radius: 10px;
+    width: 90%;
+    max-width: 640px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .modal h3 { margin-top: 0; }
+  .notes-list { max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: #fafafa; }
+  .note-item { padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+  .note-item:last-child { border-bottom: none; }
+  .note-time { font-size: 11px; color: var(--muted); }
+
+  .empty { text-align: center; padding: 40px; color: var(--muted); }
+
+  .link { color: var(--primary); text-decoration: none; word-break: break-all; }
+  .link:hover { text-decoration: underline; }
+
+  .helper { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+  @media (max-width: 720px) {
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🏠 集美租房线索管理</h1>
+    <div class="actions">
+      <button class="btn" onclick="exportCSV()">导出 CSV</button>
+      <button class="btn" onclick="importJSON()">导入备份</button>
+      <button class="btn" onclick="exportJSON()">导出备份</button>
+      <button class="btn btn-danger" onclick="clearAll()">清空</button>
+    </div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="card">
+    <h2>➕ 录入新线索</h2>
+    <div class="form-row">
+      <div class="form-field">
+        <label>来源平台</label>
+        <select id="in-platform">
+          <option value="xhs">小红书</option>
+          <option value="dy">抖音</option>
+          <option value="sph">视频号</option>
+          <option value="wb">微博</option>
+          <option value="other">其他</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>昵称</label>
+        <input id="in-nickname" placeholder="评论者昵称" />
+      </div>
+      <div class="form-field">
+        <label>原帖/评论链接</label>
+        <input id="in-link" placeholder="粘贴链接" />
+      </div>
+      <div class="form-field">
+        <label>联系方式（可选）</label>
+        <input id="in-contact" placeholder="微信 / 手机 / 私信截图备注" />
+      </div>
+    </div>
+    <div class="form-field" style="margin-bottom: 10px;">
+      <label>评论内容</label>
+      <textarea id="in-content" placeholder="粘贴对方的评论原文，系统会自动解析预算/身份/入住时间/区域..."></textarea>
+      <div class="helper">粘贴后点 "自动解析" 会提取标签并填入对应字段</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>预算（元/月）</label>
+        <input id="in-budget" type="text" placeholder="例如 1500-2000" />
+      </div>
+      <div class="form-field">
+        <label>身份</label>
+        <select id="in-identity">
+          <option value="">未知</option>
+          <option value="student">学生</option>
+          <option value="worker">上班族</option>
+          <option value="intern">实习生</option>
+          <option value="family">家庭</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>入住时间</label>
+        <input id="in-movein" placeholder="例如 本月/6月/立即" />
+      </div>
+      <div class="form-field">
+        <label>目标区域</label>
+        <input id="in-area" placeholder="例如 集大/软件园/杏林" />
+      </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn" onclick="autoParse()">🪄 自动解析</button>
+      <button class="btn btn-primary" onclick="addLead()">保存线索</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📋 线索列表</h2>
+    <div class="filters">
+      <input type="search" id="f-search" placeholder="搜索昵称/内容/备注..." oninput="render()" />
+      <select id="f-platform" onchange="render()">
+        <option value="">全部平台</option>
+        <option value="xhs">小红书</option>
+        <option value="dy">抖音</option>
+        <option value="sph">视频号</option>
+        <option value="wb">微博</option>
+        <option value="other">其他</option>
+      </select>
+      <select id="f-status" onchange="render()">
+        <option value="">全部状态</option>
+        <option value="new">新线索</option>
+        <option value="contacted">已联系</option>
+        <option value="following">跟进中</option>
+        <option value="viewing">已看房</option>
+        <option value="signed">已成交</option>
+        <option value="dropped">已放弃</option>
+      </select>
+      <select id="f-identity" onchange="render()">
+        <option value="">全部身份</option>
+        <option value="student">学生</option>
+        <option value="worker">上班族</option>
+        <option value="intern">实习生</option>
+        <option value="family">家庭</option>
+      </select>
+      <label style="display:flex; align-items:center; gap:4px; font-size:12px;">
+        <input type="checkbox" id="f-stale" onchange="render()" style="width:auto;" />
+        仅显示 3 天未跟进
+      </label>
+    </div>
+    <div id="list-wrap"></div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div id="modal" style="display:none;" class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="m-title">线索详情</h3>
+    <div id="m-body"></div>
+    <h4 style="margin-top: 16px;">跟进记录</h4>
+    <div id="m-notes" class="notes-list"></div>
+    <div style="display:flex; gap:6px; margin-top:8px;">
+      <input id="m-note-input" placeholder="添加一条跟进记录..." />
+      <button class="btn btn-primary btn-sm" onclick="addNote()">添加</button>
+    </div>
+    <div style="text-align:right; margin-top:14px;">
+      <button class="btn" onclick="closeModal()">关闭</button>
+      <button class="btn btn-danger" onclick="deleteLead()">删除此线索</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================== 数据层 ==================
+const STORAGE_KEY = 'jimei_rent_leads_v1';
+let leads = load();
+let currentLeadId = null;
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(leads)); }
+
+// ================== 自动解析 ==================
+// 从中文评论里抽取预算 / 身份 / 入住时间 / 区域
+function parse(text) {
+  const t = text || '';
+  const result = { budget: '', identity: '', movein: '', area: '', tags: [] };
+
+  // 预算：匹配 xxx-xxx, xxx元, xxx块, 预算xxx
+  const budgetPatterns = [
+    /(\d{3,5})\s*[-~到至]\s*(\d{3,5})\s*(?:元|块|\/?月)?/,
+    /预算\s*[:：]?\s*(\d{3,5})/,
+    /(\d{3,5})\s*(?:元|块|以内|左右|上下|\/月)/,
+    /(?:月租|租金|房租)\s*[:：]?\s*(\d{3,5})/,
+  ];
+  for (const p of budgetPatterns) {
+    const m = t.match(p);
+    if (m) { result.budget = m[2] ? `${m[1]}-${m[2]}` : m[1]; break; }
+  }
+
+  // 身份
+  if (/学生|大学生|集大|华厦|理工|诚毅|在校|读书|考研|毕业生/.test(t)) result.identity = 'student';
+  else if (/实习|见习|practicum/i.test(t)) result.identity = 'intern';
+  else if (/家庭|夫妻|带娃|孩子|宝宝|一家/.test(t)) result.identity = 'family';
+  else if (/上班|工作|打工|职场|公司|程序员|老师|护士|白领/.test(t)) result.identity = 'worker';
+
+  // 入住时间
+  const timePatterns = [
+    { re: /立刻|立即|马上|现在|今天|明天|急租|尽快|本周/, val: '立即' },
+    { re: /本月|这个月/, val: '本月' },
+    { re: /下(?:个)?月/, val: '下月' },
+    { re: /(\d{1,2})\s*月(?:份|初|中|底)?/, val: null },
+    { re: /开学|九月|9月/, val: '9月/开学' },
+  ];
+  for (const p of timePatterns) {
+    const m = t.match(p.re);
+    if (m) { result.movein = p.val || m[0]; break; }
+  }
+
+  // 区域（集美区常见地点）
+  const areas = [
+    '集美大学','集大','诚毅学院','华厦学院','理工学院',
+    '软件园三期','软三','软件园',
+    '杏林','杏锦','杏西','杏东',
+    '灌口','后溪','北站','集美北站',
+    '龙湖','万科','新城','侨英','孙坂',
+    'SM','印斗','岑东','岑西'
+  ];
+  const hitAreas = areas.filter(a => t.includes(a));
+  if (hitAreas.length) result.area = hitAreas.join('/');
+
+  // 标签
+  const tagMap = [
+    { re: /单间|一室|独卫/, tag: '单间' },
+    { re: /合租|室友|二房东/, tag: '合租' },
+    { re: /整租|整套/, tag: '整租' },
+    { re: /主卧/, tag: '主卧' },
+    { re: /次卧|小卧/, tag: '次卧' },
+    { re: /电梯/, tag: '要电梯' },
+    { re: /宠物|猫|狗/, tag: '带宠物' },
+    { re: /拎包|家电齐全/, tag: '拎包入住' },
+    { re: /押一付一/, tag: '押一付一' },
+    { re: /短租/, tag: '短租' },
+    { re: /长租/, tag: '长租' },
+  ];
+  result.tags = tagMap.filter(x => x.re.test(t)).map(x => x.tag);
+
+  return result;
+}
+
+function autoParse() {
+  const content = document.getElementById('in-content').value;
+  if (!content.trim()) { alert('请先粘贴评论内容'); return; }
+  const p = parse(content);
+  if (p.budget) document.getElementById('in-budget').value = p.budget;
+  if (p.identity) document.getElementById('in-identity').value = p.identity;
+  if (p.movein) document.getElementById('in-movein').value = p.movein;
+  if (p.area) document.getElementById('in-area').value = p.area;
+  // 把标签暂存到 dataset
+  document.getElementById('in-content').dataset.tags = JSON.stringify(p.tags);
+  const hit = [p.budget && `预算:${p.budget}`, p.identity, p.movein, p.area, p.tags.join(',')]
+    .filter(Boolean).join(' | ');
+  if (hit) console.log('解析结果:', hit);
+}
+
+// ================== 增删改查 ==================
+function addLead() {
+  const content = document.getElementById('in-content').value.trim();
+  const nickname = document.getElementById('in-nickname').value.trim();
+  if (!content && !nickname) { alert('昵称和内容至少填一个'); return; }
+
+  // 如果用户没点自动解析，自动跑一次拿标签
+  let tags = [];
+  try { tags = JSON.parse(document.getElementById('in-content').dataset.tags || '[]'); }
+  catch {}
+  if (!tags.length && content) tags = parse(content).tags;
+
+  const lead = {
+    id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+    platform: document.getElementById('in-platform').value,
+    nickname,
+    link: document.getElementById('in-link').value.trim(),
+    contact: document.getElementById('in-contact').value.trim(),
+    content,
+    budget: document.getElementById('in-budget').value.trim(),
+    identity: document.getElementById('in-identity').value,
+    movein: document.getElementById('in-movein').value.trim(),
+    area: document.getElementById('in-area').value.trim(),
+    tags,
+    status: 'new',
+    notes: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  leads.unshift(lead);
+  save();
+  render();
+  // 清空表单
+  ['in-nickname','in-link','in-contact','in-content','in-budget','in-movein','in-area']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('in-identity').value = '';
+  delete document.getElementById('in-content').dataset.tags;
+}
+
+function updateStatus(id, status) {
+  const lead = leads.find(l => l.id === id);
+  if (!lead) return;
+  lead.status = status;
+  lead.updatedAt = Date.now();
+  save();
+  render();
+}
+
+function openModal(id) {
+  currentLeadId = id;
+  const lead = leads.find(l => l.id === id);
+  if (!lead) return;
+  document.getElementById('m-title').textContent = `线索详情 — ${lead.nickname || '匿名'}`;
+  const body = document.getElementById('m-body');
+  body.innerHTML = `
+    <div style="font-size:13px; line-height:1.7;">
+      <div><strong>平台：</strong>${platformName(lead.platform)}</div>
+      <div><strong>昵称：</strong>${esc(lead.nickname) || '-'}</div>
+      <div><strong>链接：</strong>${lead.link ? `<a href="${esc(lead.link)}" target="_blank" class="link">${esc(lead.link)}</a>` : '-'}</div>
+      <div><strong>联系方式：</strong>${esc(lead.contact) || '-'}</div>
+      <div><strong>预算：</strong>${esc(lead.budget) || '-'} / <strong>身份：</strong>${identityName(lead.identity)} / <strong>入住：</strong>${esc(lead.movein) || '-'}</div>
+      <div><strong>目标区域：</strong>${esc(lead.area) || '-'}</div>
+      <div><strong>标签：</strong>${(lead.tags||[]).map(t => `<span class="badge badge-purple">${esc(t)}</span>`).join(' ') || '-'}</div>
+      <div style="margin-top:8px;"><strong>评论原文：</strong><br/><div style="background:#f9fafb; padding:8px; border-radius:6px; white-space:pre-wrap;">${esc(lead.content) || '-'}</div></div>
+    </div>
+  `;
+  renderNotes();
+  document.getElementById('modal').style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('modal').style.display = 'none';
+  currentLeadId = null;
+}
+function renderNotes() {
+  const lead = leads.find(l => l.id === currentLeadId);
+  const wrap = document.getElementById('m-notes');
+  if (!lead) return;
+  if (!lead.notes || !lead.notes.length) {
+    wrap.innerHTML = '<div style="color:var(--muted); font-size:12px;">暂无跟进记录</div>';
+    return;
+  }
+  wrap.innerHTML = lead.notes.slice().reverse().map(n => `
+    <div class="note-item">
+      <div class="note-time">${fmtTime(n.at)}</div>
+      <div>${esc(n.text)}</div>
+    </div>
+  `).join('');
+}
+function addNote() {
+  if (!currentLeadId) return;
+  const input = document.getElementById('m-note-input');
+  const text = input.value.trim();
+  if (!text) return;
+  const lead = leads.find(l => l.id === currentLeadId);
+  lead.notes = lead.notes || [];
+  lead.notes.push({ at: Date.now(), text });
+  lead.updatedAt = Date.now();
+  save();
+  input.value = '';
+  renderNotes();
+  render();
+}
+function deleteLead() {
+  if (!currentLeadId) return;
+  if (!confirm('确认删除这条线索？')) return;
+  leads = leads.filter(l => l.id !== currentLeadId);
+  save();
+  closeModal();
+  render();
+}
+
+// ================== 筛选 & 渲染 ==================
+function matchFilters(lead) {
+  const q = document.getElementById('f-search').value.trim().toLowerCase();
+  const pf = document.getElementById('f-platform').value;
+  const st = document.getElementById('f-status').value;
+  const id = document.getElementById('f-identity').value;
+  const stale = document.getElementById('f-stale').checked;
+
+  if (pf && lead.platform !== pf) return false;
+  if (st && lead.status !== st) return false;
+  if (id && lead.identity !== id) return false;
+  if (q) {
+    const blob = [lead.nickname, lead.content, lead.contact, lead.area, lead.budget, (lead.notes||[]).map(n=>n.text).join(' ')].join(' ').toLowerCase();
+    if (!blob.includes(q)) return false;
+  }
+  if (stale) {
+    const days = (Date.now() - lead.updatedAt) / 86400000;
+    if (days < 3) return false;
+    if (['signed','dropped'].includes(lead.status)) return false;
+  }
+  return true;
+}
+
+function render() {
+  renderStats();
+  const filtered = leads.filter(matchFilters);
+  const wrap = document.getElementById('list-wrap');
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="empty">${leads.length ? '没有匹配的线索' : '还没有线索，从上面开始录入吧'}</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>平台</th>
+          <th>昵称</th>
+          <th>需求摘要</th>
+          <th class="hide-sm">区域 / 预算</th>
+          <th class="hide-sm">身份 / 入住</th>
+          <th>状态</th>
+          <th class="hide-sm">更新</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filtered.map(renderRow).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderRow(lead) {
+  const days = (Date.now() - lead.updatedAt) / 86400000;
+  const isStale = days >= 3 && !['signed','dropped'].includes(lead.status);
+  const preview = (lead.content || '').slice(0, 50) + ((lead.content||'').length > 50 ? '…' : '');
+  const tagsHtml = (lead.tags||[]).slice(0,3).map(t => `<span class="badge badge-purple">${esc(t)}</span>`).join(' ');
+  return `
+    <tr class="${isStale ? 'stale' : ''}">
+      <td><span class="badge ${platformBadge(lead.platform)}">${platformName(lead.platform)}</span></td>
+      <td><strong>${esc(lead.nickname) || '<span style="color:var(--muted)">匿名</span>'}</strong>${lead.link ? `<br/><a href="${esc(lead.link)}" target="_blank" class="link" style="font-size:11px;">查看原帖</a>` : ''}</td>
+      <td style="max-width:280px;"><div style="color:#374151;">${esc(preview) || '-'}</div><div class="tags" style="margin-top:4px;">${tagsHtml}</div></td>
+      <td class="hide-sm">${esc(lead.area) || '-'}<br/><span style="color:var(--muted); font-size:11px;">¥ ${esc(lead.budget) || '未定'}</span></td>
+      <td class="hide-sm">${identityName(lead.identity)}<br/><span style="color:var(--muted); font-size:11px;">${esc(lead.movein) || '-'}</span></td>
+      <td>
+        <select class="status-select" onchange="updateStatus('${lead.id}', this.value)" style="background:${statusBg(lead.status)}; color:${statusColor(lead.status)}; border-radius:4px;">
+          ${['new','contacted','following','viewing','signed','dropped'].map(s =>
+            `<option value="${s}" ${s===lead.status?'selected':''}>${statusName(s)}</option>`
+          ).join('')}
+        </select>
+      </td>
+      <td class="hide-sm" style="font-size:11px; color:var(--muted);">${fmtRelative(lead.updatedAt)}</td>
+      <td><button class="btn btn-sm" onclick="openModal('${lead.id}')">详情</button></td>
+    </tr>
+  `;
+}
+
+function renderStats() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayTs = today.getTime();
+  const total = leads.length;
+  const todayNew = leads.filter(l => l.createdAt >= todayTs).length;
+  const pending = leads.filter(l => ['new','contacted','following'].includes(l.status)).length;
+  const stale = leads.filter(l => {
+    const days = (Date.now() - l.updatedAt) / 86400000;
+    return days >= 3 && !['signed','dropped'].includes(l.status);
+  }).length;
+  const signed = leads.filter(l => l.status === 'signed').length;
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="label">总线索</div><div class="value">${total}</div></div>
+    <div class="stat"><div class="label">今日新增</div><div class="value">${todayNew}</div></div>
+    <div class="stat"><div class="label">待跟进</div><div class="value">${pending}</div></div>
+    <div class="stat warn"><div class="label">超 3 天未动</div><div class="value">${stale}</div></div>
+    <div class="stat success"><div class="label">已成交</div><div class="value">${signed}</div></div>
+  `;
+}
+
+// ================== 辅助 ==================
+function esc(s) { return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function platformName(p) { return {xhs:'小红书',dy:'抖音',sph:'视频号',wb:'微博',other:'其他'}[p]||p; }
+function platformBadge(p) { return {xhs:'badge-red',dy:'badge-gray',sph:'badge-green',wb:'badge-yellow',other:'badge-gray'}[p]||'badge-gray'; }
+function identityName(i) { return {student:'学生',worker:'上班族',intern:'实习生',family:'家庭'}[i]||'-'; }
+function statusName(s) { return {new:'新线索',contacted:'已联系',following:'跟进中',viewing:'已看房',signed:'已成交',dropped:'已放弃'}[s]||s; }
+function statusBg(s) { return {new:'#dbeafe',contacted:'#fef3c7',following:'#fef3c7',viewing:'#e9d5ff',signed:'#d1fae5',dropped:'#f3f4f6'}[s]||'#f3f4f6'; }
+function statusColor(s) { return {new:'#1e40af',contacted:'#92400e',following:'#92400e',viewing:'#6b21a8',signed:'#065f46',dropped:'#6b7280'}[s]||'#374151'; }
+function fmtTime(ts) { const d = new Date(ts); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function pad(n) { return String(n).padStart(2,'0'); }
+function fmtRelative(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return '刚刚';
+  if (m < 60) return `${m}分钟前`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}小时前`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}天前`;
+  return fmtTime(ts);
+}
+
+// ================== 导入导出 ==================
+function exportCSV() {
+  if (!leads.length) { alert('没有数据'); return; }
+  const headers = ['创建时间','平台','昵称','链接','联系方式','评论内容','预算','身份','入住时间','区域','标签','状态','跟进记录'];
+  const rows = leads.map(l => [
+    fmtTime(l.createdAt), platformName(l.platform), l.nickname, l.link, l.contact,
+    l.content, l.budget, identityName(l.identity), l.movein, l.area,
+    (l.tags||[]).join(';'), statusName(l.status),
+    (l.notes||[]).map(n => `[${fmtTime(n.at)}]${n.text}`).join(' | ')
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(cell =>
+    `"${String(cell||'').replace(/"/g,'""')}"`
+  ).join(',')).join('\n');
+  // 加 BOM 以便 Excel 正确识别中文
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  downloadBlob(blob, `集美租房线索_${Date.now()}.csv`);
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(leads, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, `leads_backup_${Date.now()}.json`);
+}
+
+function importJSON() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data)) throw new Error('格式错误');
+        if (confirm(`将导入 ${data.length} 条线索，会与现有数据合并（按 id 去重）。继续？`)) {
+          const existing = new Set(leads.map(l => l.id));
+          data.forEach(d => { if (!existing.has(d.id)) leads.push(d); });
+          save(); render();
+          alert('导入完成');
+        }
+      } catch (err) { alert('导入失败: ' + err.message); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+
+function clearAll() {
+  if (!leads.length) return alert('已经是空的了');
+  if (!confirm(`确认清空全部 ${leads.length} 条线索？建议先点 "导出备份"。`)) return;
+  if (!confirm('再次确认？此操作不可撤销')) return;
+  leads = []; save(); render();
+}
+
+// ================== 启动 ==================
+render();
+</script>
+</body>
+</html>
