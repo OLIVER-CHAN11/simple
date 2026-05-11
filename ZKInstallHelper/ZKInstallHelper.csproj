@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
+    <AssemblyName>ZKInstallHelper</AssemblyName>
+    <RootNamespace>ZKInstallHelper</RootNamespace>
+    <Version>1.0.0</Version>
+    <Company>智控安装助手</Company>
+    <Product>智控安装助手</Product>
+    <Description>工业软件安装环境检测与修复工具</Description>
+  </PropertyGroup>
+
+</Project>
