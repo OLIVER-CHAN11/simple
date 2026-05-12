@@ -3,13 +3,8 @@ name: Build ZKSystemPrep
 on:
   push:
     branches: [ zksystemprep, master, main ]
-    paths:
-      - 'ZKSystemPrep/**'
-      - '.github/workflows/build-zksystemprep.yml'
   pull_request:
     branches: [ master, main ]
-    paths:
-      - 'ZKSystemPrep/**'
   workflow_dispatch:
 
 jobs:
