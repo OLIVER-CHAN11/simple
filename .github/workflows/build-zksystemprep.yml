@@ -1,0 +1,56 @@
+name: Build ZKSystemPrep
+
+on:
+  push:
+    branches: [ zksystemprep, master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore ZKSystemPrep/ZKSystemPrep.csproj
+
+    - name: Build Release
+      run: dotnet build ZKSystemPrep/ZKSystemPrep.csproj -c Release --no-restore
+
+    - name: Publish single-file EXE (self-contained)
+      run: |
+        dotnet publish ZKSystemPrep/ZKSystemPrep.csproj `
+          -c Release `
+          -r win-x64 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -o ./publish
+
+    - name: Create tools directory in publish
+      run: |
+        New-Item -ItemType Directory -Force -Path ./publish/tools
+        New-Item -ItemType Directory -Force -Path ./publish/logs
+        New-Item -ItemType Directory -Force -Path ./publish/backups/registry
+        New-Item -ItemType Directory -Force -Path ./publish/reports
+
+    - name: Upload EXE artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ZKSystemPrep-win-x64
+        path: |
+          ./publish/ZKSystemPrep.exe
+          ./publish/tools/
+          ./publish/logs/
+          ./publish/backups/
+          ./publish/reports/
+        retention-days: 90
